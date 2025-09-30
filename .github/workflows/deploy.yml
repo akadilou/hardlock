@@ -12,9 +12,16 @@ concurrency:
 jobs:
   rsync-and-restart:
     runs-on: ubuntu-latest
-    if: ${{ secrets.SSH_HOST && secrets.SSH_USER && secrets.SSH_KEY }}
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_KEY:  ${{ secrets.SSH_KEY }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify required secrets
+        run: |
+          [ -n "$SSH_HOST" ] && [ -n "$SSH_USER" ] && [ -n "$SSH_KEY" ] || { echo "Missing secrets SSH_HOST/SSH_USER/SSH_KEY"; exit 1; }
 
       - name: Rsync sources to VM
         uses: burnett01/rsync-deployments@7.0.1
@@ -26,16 +33,16 @@ jobs:
             docker-compose.yml
             Caddyfile
           remote_path: /opt/hardlock/
-          remote_host: ${{ secrets.SSH_HOST }}
-          remote_user: ${{ secrets.SSH_USER }}
-          remote_key: ${{ secrets.SSH_KEY }}
+          remote_host: ${{ env.SSH_HOST }}
+          remote_user: ${{ env.SSH_USER }}
+          remote_key: ${{ env.SSH_KEY }}
 
       - name: Restart stack
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
           script: |
             set -euo pipefail
             cd /opt/hardlock
