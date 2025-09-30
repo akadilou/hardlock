@@ -23,15 +23,21 @@ jobs:
         run: |
           [ -n "$SSH_HOST" ] && [ -n "$SSH_USER" ] && [ -n "$SSH_KEY" ] || { echo "Missing secrets SSH_HOST/SSH_USER/SSH_KEY"; exit 1; }
 
-      - name: Rsync sources to VM
+      - name: Ensure remote path exists
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          script: |
+            set -euo pipefail
+            mkdir -p /opt/hardlock
+
+      - name: Rsync repo (exclude sensitive/CI files)
         uses: burnett01/rsync-deployments@7.0.1
         with:
-          switches: -az --delete
-          path: |
-            api/
-            kms-rs/
-            docker-compose.yml
-            Caddyfile
+          switches: -az --delete --exclude '.git/' --exclude '.github/' --exclude '.env' --exclude 'DEPLOY_TRIGGER'
+          path: ./
           remote_path: /opt/hardlock/
           remote_host: ${{ env.SSH_HOST }}
           remote_user: ${{ env.SSH_USER }}
