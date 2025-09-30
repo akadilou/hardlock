@@ -1,1 +1,37 @@
-# … contenu du workflow deploy.yml …
+name: deploy
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+jobs:
+  rsync-and-restart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: burnett01/rsync-deployments@7.0.1
+        with:
+          switches: -az --delete
+          path: |
+            api/
+            kms-rs/
+            docker-compose.yml
+            Caddyfile
+            .env
+          remote_path: /opt/hardlock/
+          remote_host: ${{ secrets.SSH_HOST }}
+          remote_user: ${{ secrets.SSH_USER }}
+          remote_key: ${{ secrets.SSH_KEY }}
+      - uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/hardlock
+            docker compose build
+            docker compose up -d --remove-orphans
+            /usr/local/bin/hardlock-status
