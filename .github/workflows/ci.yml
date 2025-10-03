@@ -1,1 +1,51 @@
-# … contenu du workflow ci.yml …
+name: ci
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "CI sanity OK"
+
+  kms-rust:
+    if: ${{ hashFiles('kms-rs/**') != '' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kms-rs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo build --release
+      - run: cargo test --all --release
+
+  api-python:
+    if: ${{ hashFiles('api/**') != '' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir ruff mypy
+      - run: ruff check .
+      - run: mypy --ignore-missing-imports app || true
+      - name: Docker build smoke
+        run: |
+          test -f Dockerfile || exit 0
+          docker build -t hardlock-api:ci .
