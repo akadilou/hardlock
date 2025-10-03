@@ -21,7 +21,8 @@ jobs:
 
       - name: Verify required secrets
         run: |
-          [ -n "$SSH_HOST" ] && [ -n "$SSH_USER" ] && [ -n "$SSH_KEY" ] || { echo "Missing secrets SSH_HOST/SSH_USER/SSH_KEY"; exit 1; }
+          [ -n "$SSH_HOST" ] && [ -n "$SSH_USER" ] && [ -n "$SSH_KEY" ] \
+            || { echo "Missing secrets SSH_HOST/SSH_USER/SSH_KEY"; exit 1; }
 
       - name: Ensure remote path exists
         uses: appleboy/ssh-action@v1.0.3
@@ -33,17 +34,17 @@ jobs:
             set -euo pipefail
             mkdir -p /opt/hardlock
 
-      - name: Rsync repo (exclude sensitive/CI files)
+      - name: Rsync repo (safe; keep server .env & configs)
         uses: burnett01/rsync-deployments@7.0.1
         with:
-          switches: -az --delete --exclude '.git/' --exclude '.github/' --exclude '.env' --exclude 'DEPLOY_TRIGGER'
+          switches: -az --exclude '.git/' --exclude '.github/' --exclude '.env' --exclude 'DEPLOY_TRIGGER'
           path: ./
           remote_path: /opt/hardlock/
           remote_host: ${{ env.SSH_HOST }}
           remote_user: ${{ env.SSH_USER }}
           remote_key: ${{ env.SSH_KEY }}
 
-      - name: Restart stack
+      - name: Restart stack (compose plugin or docker-compose)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ env.SSH_HOST }}
@@ -52,6 +53,10 @@ jobs:
           script: |
             set -euo pipefail
             cd /opt/hardlock
-            docker compose build
-            docker compose up -d --remove-orphans
+            if docker compose version >/dev/null 2>&1; then C="docker compose"; \
+            elif command -v docker-compose >/dev/null 2>&1; then C="docker-compose"; \
+            else echo "No docker compose available"; exit 1; fi
+            $C -f docker-compose.yml config >/dev/null
+            $C build
+            $C up -d --remove-orphans
             /usr/local/bin/hardlock-status
