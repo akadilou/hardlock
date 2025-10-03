@@ -21,8 +21,7 @@ jobs:
 
       - name: Verify required secrets
         run: |
-          [ -n "$SSH_HOST" ] && [ -n "$SSH_USER" ] && [ -n "$SSH_KEY" ] \
-            || { echo "Missing secrets SSH_HOST/SSH_USER/SSH_KEY"; exit 1; }
+          [ -n "$SSH_HOST" ] && [ -n "$SSH_USER" ] && [ -n "$SSH_KEY" ] || { echo "Missing secrets SSH_HOST/SSH_USER/SSH_KEY"; exit 1; }
 
       - name: Ensure remote path exists
         uses: appleboy/ssh-action@v1.0.3
@@ -44,7 +43,7 @@ jobs:
           remote_user: ${{ env.SSH_USER }}
           remote_key: ${{ env.SSH_KEY }}
 
-      - name: Restart stack (compose plugin or docker-compose) with diagnostics
+      - name: Restart + wait for health
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ env.SSH_HOST }}
@@ -52,18 +51,18 @@ jobs:
           key: ${{ env.SSH_KEY }}
           script: |
             set -euo pipefail
-            echo "== Host info =="; uname -a || true; whoami || true; id || true
-            echo "== Docker info =="; command -v docker || true; docker --version || true
-            echo "== Compose detection =="
-            if docker compose version >/dev/null 2>&1; then C="docker compose"; echo "Using: docker compose"
-            elif command -v docker-compose >/dev/null 2>&1; then C="docker-compose"; echo "Using: docker-compose"
-            else echo "ERROR: no docker compose found"; exit 12; fi
-            echo "== Project dir =="; cd /opt/hardlock || { echo "ERROR: /opt/hardlock missing"; exit 10; }
-            echo "== Listing /opt/hardlock =="; ls -la || true
-            test -f docker-compose.yml || { echo "ERROR: docker-compose.yml missing"; exit 11; }
-            echo "== Validate compose config =="; $C -f docker-compose.yml config >/dev/null || { echo "ERROR: compose config invalid"; $C -f docker-compose.yml config; exit 13; }
-            echo "== Build =="; $C build || { echo "ERROR: compose build failed"; exit 14; }
-            echo "== Up -d =="; $C up -d --remove-orphans || { echo "ERROR: compose up failed"; exit 15; }
-            echo "== Status =="
-            if command -v /usr/local/bin/hardlock-status >/dev/null 2>&1; then /usr/local/bin/hardlock-status || true
-            else $C ps || true; fi
+            cd /opt/hardlock
+            if docker compose version >/dev/null 2>&1; then C="docker compose"; else C="docker-compose"; fi
+            $C -f docker-compose.yml config >/dev/null
+            $C build
+            $C up -d --remove-orphans
+            # wait up to 60s for both services
+            for i in $(seq 1 12); do
+              API=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/health || true)
+              KMS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8081/health || true)
+              echo "try=$i api=$API kms=$KMS"
+              if [ "$API" = "200" ] && [ "$KMS" = "200" ]; then break; fi
+              sleep 5
+            done
+            [ "$API" = "200" ] && [ "$KMS" = "200" ] || { echo "ERROR: health check failed (api=$API kms=$KMS)"; $C ps; exit 16; }
+            echo "OK: api/kms health 200"
