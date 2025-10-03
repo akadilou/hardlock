@@ -44,7 +44,7 @@ jobs:
           remote_user: ${{ env.SSH_USER }}
           remote_key: ${{ env.SSH_KEY }}
 
-      - name: Restart stack (compose plugin or docker-compose)
+      - name: Restart stack (compose plugin or docker-compose) with diagnostics
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ env.SSH_HOST }}
@@ -52,11 +52,18 @@ jobs:
           key: ${{ env.SSH_KEY }}
           script: |
             set -euo pipefail
-            cd /opt/hardlock
-            if docker compose version >/dev/null 2>&1; then C="docker compose"; \
-            elif command -v docker-compose >/dev/null 2>&1; then C="docker-compose"; \
-            else echo "No docker compose available"; exit 1; fi
-            $C -f docker-compose.yml config >/dev/null
-            $C build
-            $C up -d --remove-orphans
-            /usr/local/bin/hardlock-status
+            echo "== Host info =="; uname -a || true; whoami || true; id || true
+            echo "== Docker info =="; command -v docker || true; docker --version || true
+            echo "== Compose detection =="
+            if docker compose version >/dev/null 2>&1; then C="docker compose"; echo "Using: docker compose"
+            elif command -v docker-compose >/dev/null 2>&1; then C="docker-compose"; echo "Using: docker-compose"
+            else echo "ERROR: no docker compose found"; exit 12; fi
+            echo "== Project dir =="; cd /opt/hardlock || { echo "ERROR: /opt/hardlock missing"; exit 10; }
+            echo "== Listing /opt/hardlock =="; ls -la || true
+            test -f docker-compose.yml || { echo "ERROR: docker-compose.yml missing"; exit 11; }
+            echo "== Validate compose config =="; $C -f docker-compose.yml config >/dev/null || { echo "ERROR: compose config invalid"; $C -f docker-compose.yml config; exit 13; }
+            echo "== Build =="; $C build || { echo "ERROR: compose build failed"; exit 14; }
+            echo "== Up -d =="; $C up -d --remove-orphans || { echo "ERROR: compose up failed"; exit 15; }
+            echo "== Status =="
+            if command -v /usr/local/bin/hardlock-status >/dev/null 2>&1; then /usr/local/bin/hardlock-status || true
+            else $C ps || true; fi
