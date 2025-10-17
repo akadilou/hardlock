@@ -72,6 +72,21 @@ jobs:
     needs: rsync-and-restart
     steps:
       - name: Check HTTPS health endpoints
+        env:
+          SMOKE_IP: 51.15.200.66
+        run: |
+          set -e
+          IP=${SMOKE_IP:-51.15.200.66}
+          for h in tufkey.com api.tufkey.com kms.tufkey.com; do
+            url="https://$h/health"
+            # force IPv4, bypass DNS with --resolve, retries
+            code=$(curl -4 -sk --connect-timeout 5 --max-time 10 --retry 3 --retry-delay 2 --resolve $h:443:$IP -o /dev/null -w "%{http_code}" "$url" || true)
+            echo "$h => $code"
+            if [ "$code" != "200" ]; then
+              echo "ERROR: $h returned $code"
+              exit 1
+            fi
+          done
         run: |
           for u in https://tufkey.com/health https://api.tufkey.com/health https://kms.tufkey.com/health; do
             code=$(curl -sk -o /dev/null -w "%{http_code}" "$u")
