@@ -3,7 +3,6 @@ on:
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
-
 jobs:
   smoke:
     runs-on: ubuntu-latest
@@ -15,8 +14,7 @@ jobs:
         run: |
           set -e
           for h in $HOSTS; do
-            url="https://$h/health"
-            code=$(curl -4 -sk --connect-timeout 5 --max-time 12 --retry 3 --retry-delay 2 --resolve "$h:443:$TARGET_IP" -o /dev/null -w "%{http_code}" "$url" || true)
+            code=$(curl -4 -sk --connect-timeout 5 --max-time 12 --retry 3 --retry-delay 2 --resolve $h:443:$TARGET_IP -o /dev/null -w "%{http_code}" https://$h/health || true)
             echo "$h => $code"
             [ "$code" = "200" ] || exit 1
           done
