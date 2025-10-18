@@ -15,3 +15,44 @@ jobs:
     steps:
       - name: CI sanity OK
         run: echo "OK"
+
+  api-python:
+    if: ${{ hashFiles('api/**') != '' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        run: pip install --no-cache-dir ruff mypy
+      - name: Lint (ruff) non-blocking
+        run: ruff check . || true
+      - name: Typecheck (mypy) non-blocking
+        run: mypy --ignore-missing-imports app || true
+      - name: Docker build smoke non-blocking
+        run: |
+          if [ -f Dockerfile ]; then docker build -t hardlock-api:ci . || true; fi
+
+  kms-rust:
+    if: ${{ hashFiles('kms-rs/**') != '' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kms-rs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - name: fmt non-blocking
+        run: cargo fmt --all -- --check || true
+      - name: clippy non-blocking
+        run: cargo clippy --all-targets --all-features || true
+      - name: build non-blocking
+        run: cargo build --release || true
+      - name: tests non-blocking
+        run: cargo test --all --release || true
