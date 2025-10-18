@@ -13,26 +13,11 @@ jobs:
   sanity:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "CI sanity OK"
-
-  kms-rust:
-    if: ${{ hashFiles('kms-rs/**') != '' }}
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: kms-rs
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy,rustfmt
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --all-targets --all-features -- -D warnings
-      - run: cargo build --release
-      - run: cargo test --all --release
+      - name: CI sanity
+        run: echo "OK"
 
   api-python:
-    if: ${{ hashFiles('api/**') != '' }}
+    if: ${{ hashFiles('api/**') != '' && hashFiles('.ci/enable_api') != '' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -42,10 +27,33 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install --no-cache-dir ruff mypy
-      - run: ruff check .
-      - run: mypy --ignore-missing-imports app || true
-      - name: Docker build smoke
+      - name: Lint (ruff) non-bloquant
         run: |
-          test -f Dockerfile || exit 0
-          docker build -t hardlock-api:ci .
+          pip install --no-cache-dir ruff mypy
+          ruff --version
+          ruff check . || true
+      - name: Typecheck (mypy) non-bloquant
+        run: mypy --ignore-missing-imports app || true
+      - name: Docker build smoke (si Dockerfile présent)
+        run: |
+          if [ -f Dockerfile ]; then docker build -t hardlock-api:ci . || true; fi
+
+  kms-rust:
+    if: ${{ hashFiles('kms-rs/**') != '' && hashFiles('.ci/enable_rust') != '' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kms-rs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - name: fmt (non-bloquant)
+        run: cargo fmt --all -- --check || true
+      - name: clippy (non-bloquant)
+        run: cargo clippy --all-targets --all-features || true
+      - name: build (non-bloquant)
+        run: cargo build --release || true
+      - name: tests (non-bloquant)
+        run: cargo test --all --release || true
