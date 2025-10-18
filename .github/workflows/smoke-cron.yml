@@ -1,0 +1,17 @@
+name: smoke-cron
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check public HTTPS endpoints
+        run: |
+          set -e
+          for u in https://tufkey.com/health https://api.tufkey.com/health https://kms.tufkey.com/health; do
+            code=$(curl -sk -o /dev/null -w "%{http_code}" "$u")
+            echo "$u => $code"
+            [ "$code" = "200" ] || exit 1
+          done
