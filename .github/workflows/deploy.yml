@@ -84,3 +84,20 @@ jobs:
               exit 17
             fi
           done
+
+  smoke-test-ip:
+    runs-on: ubuntu-latest
+    needs: rsync-and-restart
+    env:
+      TARGET_IP: 51.15.200.66
+      HOSTS: "tufkey.com api.tufkey.com kms.tufkey.com"
+    steps:
+      - name: HTTPS smoke with DNS bypass (IPv4 + retries)
+        run: |
+          set -e
+          for h in $HOSTS; do
+            code=$(curl -4 -sk --connect-timeout 5 --max-time 12 --retry 3 --retry-delay 2 \
+                    --resolve $h:443:$TARGET_IP -o /dev/null -w "%{http_code}" https://$h/health || true)
+            echo "$h => $code"
+            [ "$code" = "200" ] || exit 1
+          done
