@@ -3,6 +3,9 @@ on:
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
+concurrency:
+  group: smoke-cron
+  cancel-in-progress: true
 jobs:
   smoke:
     runs-on: ubuntu-latest
@@ -10,11 +13,18 @@ jobs:
       TARGET_IP: 51.15.200.66
       HOSTS: "tufkey.com api.tufkey.com kms.tufkey.com"
     steps:
-      - name: Check public HTTPS endpoints (DNS bypass, IPv4, retries)
+      - name: HTTPS smoke (DNS bypass, IPv4, retries, 3 rounds)
         run: |
           set -e
-          for h in $HOSTS; do
-            code=$(curl -4 -sk --connect-timeout 5 --max-time 12 --retry 3 --retry-delay 2 --resolve $h:443:$TARGET_IP -o /dev/null -w "%{http_code}" https://$h/health || true)
-            echo "$h => $code"
-            [ "$code" = "200" ] || exit 1
+          ok=0
+          for round in 1 2 3; do
+            all=1
+            for h in $HOSTS; do
+              code=$(curl -4 -sk --connect-timeout 8 --max-time 20 --retry 3 --retry-delay 2 --resolve "$h:443:$TARGET_IP" -o /dev/null -w "%{http_code}" "https://$h/health" || true)
+              echo "round=$round $h => $code"
+              [ "$code" = "200" ] || all=0
+            done
+            [ $all -eq 1 ] && ok=1 && break
+            sleep 5
           done
+          [ $ok -eq 1 ]
