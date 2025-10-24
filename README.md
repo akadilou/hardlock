@@ -1,19 +1,5 @@
-![CI](https://github.com/akadilou/hardlock/actions/workflows/ci.yml/badge.svg)
-![Deploy](https://github.com/akadilou/hardlock/actions/workflows/deploy.yml/badge.svg)
+Hardlock – secure deployment backbone
 
-# Hardlock – Produit (V1)
+Provides minimal CI/CD scaffolding for containerized apps: reverse proxy templates, Docker Compose manifests and GitHub Actions (deploy + periodic smoke checks).
 
-Hardlock = appli mobile sécurisée.
-Hardlock Guard (Platform) = service backend (KMS + API + Proxy).
-
-## Architecture
-App (iOS/Android) → HTTP(S) → API (attest_api) → KMS.
-
-## Environnements
-Dev local : http://127.0.0.1:8088/api/...
-Staging : https://staging.hardlock.app/api/...
-Prod : https://api.hardlock.app/...
-
-## Roadmap courte
-V1: 3 endpoints stables (/health, /pubkey, /attest), stack locale.
-V2: déploiement cloud (TLS), SDK iOS/Android, observabilité.
+This repository contains deployment infrastructure only.
