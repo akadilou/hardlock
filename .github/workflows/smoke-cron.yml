@@ -15,29 +15,7 @@ jobs:
     steps:
       - name: Warm-up
         run: sleep 10
-      - name: Layer 1 (optional local via SSH)
-        if: ${{ secrets.SSH_HOST && secrets.SSH_USER && secrets.SSH_KEY }}
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            set -e
-            urls="http://127.0.0.1/health http://127.0.0.1/api/health http://127.0.0.1/kms/health"
-            ok=0
-            for u in $urls; do
-              pass=0
-              for r in 1 2 3; do
-                c=$(curl -s -o /dev/null -w "%{http_code}" "$u" || true)
-                echo "local $u r=$r => $c"
-                [ "$c" = "200" ] && pass=1 && break
-                sleep 2
-              done
-              [ $pass -eq 1 ] && ok=$((ok+1))
-            done
-            echo "local_ok=$ok"
-      - name: Layer 2 (external, DNS bypass, IPv4, retries; must pass >=2/3)
+      - name: External DNS-bypass (2/3 consensus, 3 rounds, IPv4)
         run: |
           set -e
           ok=0
@@ -54,19 +32,3 @@ jobs:
           done
           echo "bypass_ok=$ok"
           [ "$ok" -ge 2 ]
-      - name: Layer 3 (external DNS real, IPv4, retries; informational)
-        run: |
-          set -e
-          ok=0
-          for h in $HOSTS; do
-            pass=0
-            for r in 1 2 3; do
-              c=$(curl -4 -sk --connect-timeout 8 --max-time 20 --retry 3 --retry-delay 2 --retry-all-errors \
-                   -o /dev/null -w "%{http_code}" "https://$h/health" || echo 000)
-              echo "dns $h r=$r => $c"
-              [ "$c" = "200" ] && pass=1 && break
-              sleep 3
-            done
-            [ $pass -eq 1 ] && ok=$((ok+1))
-          done
-          echo "dns_ok=$ok"
